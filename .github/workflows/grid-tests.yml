@@ -1,0 +1,55 @@
+name: Playwright on Selenium Grid
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: grid-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - name: Install and lint
+        run: |
+          python -m pip install -r requirements.txt
+          python -m ruff check .
+      - name: Start Selenium Grid
+        run: |
+          docker run -d --name pagepilot-grid --network host --shm-size=2g             -e SE_NODE_GRID_URL=http://localhost:4444             selenium/standalone-chrome:4.49.0-20260909
+          ready=false
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:4444/status | python -c 'import json,sys;sys.exit(0 if json.load(sys.stdin)["value"]["ready"] else 1)'; then
+              ready=true; break
+            fi
+            sleep 2
+          done
+          [ "$ready" = true ] || { docker logs pagepilot-grid; exit 1; }
+      - name: Run Python POM tests on Grid Chrome
+        env:
+          SELENIUM_REMOTE_URL: http://localhost:4444
+        run: >-
+          python -m pytest --browser chromium
+          --tracing retain-on-failure --screenshot only-on-failure
+          --junitxml=artifacts/results.xml --output=artifacts/browser
+      - name: Capture Grid logs
+        if: always()
+        run: |
+          mkdir -p artifacts
+          docker logs pagepilot-grid > artifacts/grid.log 2>&1 || true
+          docker rm -f pagepilot-grid || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pagepilot-test-evidence
+          path: artifacts/
+          retention-days: 7

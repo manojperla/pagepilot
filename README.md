@@ -4,6 +4,10 @@
 
 Six deterministic example tests exercise a bundled task-board application. Page objects encapsulate user actions and semantic locators; tests express expected behavior using Playwright's retrying assertions. Pytest creates a fresh browser context for each test and a temporary local demo server for each run.
 
+[![Quick-start check](https://github.com/manojperla/pagepilot/actions/workflows/quick-start.yml/badge.svg?branch=main)](https://github.com/manojperla/pagepilot/actions/workflows/quick-start.yml)
+
+Every Monday, CI installs the pinned requirements in a fresh Python environment, runs the bundled examples against local Chromium, and verifies the JUnit report contains test cases.
+
 ## Quick start
 Python 3.12+:
 ```sh

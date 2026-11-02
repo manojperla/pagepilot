@@ -1,0 +1,60 @@
+name: Quick-start check
+on:
+  schedule:
+    - cron: '17 3 * * 1'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/quick-start.yml'
+      - 'requirements.txt'
+permissions:
+  contents: read
+jobs:
+  quick-start:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check clean install and bundled examples
+        run: |
+          check() (
+            set -e
+            python -m venv --clear .venv
+            source .venv/bin/activate
+            python -m pip install -r requirements.txt
+            python -m playwright install chromium
+            python -m pytest --browser chromium --tracing retain-on-failure --screenshot only-on-failure --junitxml=results.xml
+            python -c "import xml.etree.ElementTree as ET; assert ET.parse('results.xml').find('.//testcase') is not None"
+          )
+          set +e
+          check
+          status=$?
+          set -e
+          if [ "$status" -ne 0 ]; then
+            echo "::warning::Quick-start check failed; retrying once"
+            check
+          fi
+  report-failure:
+    if: failure() && needs.quick-start.result == 'failure' && github.event_name == 'schedule'
+    needs: quick-start
+    runs-on: ubuntu-24.04
+    timeout-minutes: 3
+    permissions:
+      issues: write
+    steps:
+      - name: Create or update the maintenance issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          title='Weekly PagePilot quick-start failure'
+          body="The scheduled clean-install check failed. [Inspect the failing step and commands]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)."
+          issue=$(gh issue list --state open --search "in:title \"$title\"" --json number,title,author --jq '.[] | select(.title == "Weekly PagePilot quick-start failure" and (.author.login == "app/github-actions" or .author.login == "github-actions[bot]")) | .number' | head -1)
+          if [ -n "$issue" ]; then
+            gh issue edit "$issue" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

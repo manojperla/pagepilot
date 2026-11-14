@@ -45,3 +45,18 @@ On Windows/macOS use local Playwright for the simplest setup, or configure a Gri
 
 ## Add a new journey
 Add semantic locators and reusable actions to a page object, then write assertions in a test. Avoid fixed sleeps, shared mutable pages, and test-order dependencies. Run `python -m ruff check .` before pushing. Keep real credentials in CI secrets; screenshots and traces may contain application data when adapting this starter.
+
+## Choosing a test run
+
+| Goal | Command |
+|---|---|
+| Collect tests without opening a browser | `python -m pytest --collect-only -q` |
+| Run the smoke subset locally | `python -m pytest -m smoke --browser chromium` |
+| Inspect a local failure | `python -m pytest --browser chromium --headed --tracing retain-on-failure` |
+| Save machine-readable results | `python -m pytest --browser chromium --junitxml=results.xml` |
+
+Without `BASE_URL`, the session fixture starts the bundled demo on a random
+loopback port and shuts it down after the run. Setting `BASE_URL` bypasses that
+server; you then own the target application's lifecycle.
+
+See [failure diagnosis](docs/troubleshooting.md) before increasing timeouts.
